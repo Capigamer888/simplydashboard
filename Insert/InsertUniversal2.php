@@ -1,6 +1,6 @@
 <?php
 /**
- * CarlosHub - Procesamiento de Inserción de Registros (Insert Action)
+ * SimplyDashboard - Procesamiento de Inserción de Registros (Insert Action)
  * 
  * Este archivo recibe los datos del formulario de inserción y realiza:
  * 1. Sanitización de parámetros y validación de la tabla contra INFORMATION_SCHEMA.

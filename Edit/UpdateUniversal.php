@@ -1,6 +1,6 @@
 <?php
 /**
- * CarlosHub - Procesamiento de Actualización de Registros (Update)
+ * SimplyDashboard - Procesamiento de Actualización de Registros (Update)
  * 
  * Este archivo procesa la actualización de datos enviada desde el formulario de edición:
  * 1. Sanitiza los parámetros de tabla y clave primaria.

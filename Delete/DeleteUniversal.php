@@ -1,6 +1,6 @@
 <?php
 /**
- * CarlosHub - Eliminación Universal de Registros (Delete Action)
+ * SimplyDashboard - Eliminación Universal de Registros (Delete Action)
  * 
  * Este archivo elimina de forma segura un registro específico de una tabla:
  * 1. Sanitiza los parámetros de tabla (`tbl`), columna clave (`col`) y valor de ID (`id`).

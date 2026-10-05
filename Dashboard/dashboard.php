@@ -1,6 +1,6 @@
 <?php
 /**
- * CarlosHub - Panel Principal (Dashboard)
+ * SimplyDashboard - Panel Principal (Dashboard)
  * 
  * Este archivo consulta el catálogo del sistema `INFORMATION_SCHEMA.TABLES` de MySQL
  * para identificar y listar dinámicamente todas las tablas base que existen dentro
@@ -42,7 +42,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tablas en <?= e($activeDb) ?> | CarlosHub</title>
+    <title>Tablas en <?= e($activeDb) ?> | SimplyDashboard</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>

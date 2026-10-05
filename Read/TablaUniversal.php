@@ -1,6 +1,6 @@
 <?php
 /**
- * CarlosHub - Visualización Universal de Tablas (Read)
+ * SimplyDashboard - Visualización Universal de Tablas (Read)
  * 
  * Este archivo inspecciona metadatos de MySQL mediante `INFORMATION_SCHEMA.COLUMNS`
  * e `INFORMATION_SCHEMA.KEY_COLUMN_USAGE` para:
@@ -95,7 +95,7 @@ $ruta_foto = BASE_URL . "/Foto/";
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tabla: <?= e($table) ?> | CarlosHub</title>
+    <title>Tabla: <?= e($table) ?> | SimplyDashboard</title>
     <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>

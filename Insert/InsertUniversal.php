@@ -1,6 +1,6 @@
 <?php
 /**
- * CarlosHub - Formulario de Inserción Universal de Registros (Insert)
+ * SimplyDashboard - Formulario de Inserción Universal de Registros (Insert)
  * 
  * Este archivo consulta el diccionario de datos de MySQL (`INFORMATION_SCHEMA`) para:
  * 1. Validar la tabla en la que se insertará el nuevo registro.
@@ -96,7 +96,7 @@ $siguienteId = ($primaryKeyCol !== '') ? calcularSiguienteId($conn, $table, $pri
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Insertar en <?= e($table) ?> | CarlosHub</title>
+    <title>Insertar en <?= e($table) ?> | SimplyDashboard</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>

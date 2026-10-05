@@ -1,6 +1,6 @@
 <?php
 /**
- * CarlosHub - Inicializaciones y Configuración Base
+ * SimplyDashboard - Inicializaciones y Configuración Base
  * 
  * Este archivo centraliza la configuración del entorno, la sesión y la conexión
  * PDO a la base de datos MySQL local (típicamente bajo el entorno XAMPP).
@@ -19,7 +19,7 @@ if (!defined('BASE_URL')) {
         }
     }
     $detectedBase = rtrim($scriptDir, '/');
-    define('BASE_URL', ($detectedBase !== '' && $detectedBase !== '.') ? $detectedBase : '/CarlosHub');
+    define('BASE_URL', ($detectedBase !== '' && $detectedBase !== '.') ? $detectedBase : '/SimplyDashboard');
 }
 
 // Define la ruta física absoluta en el disco del servidor

@@ -1,16 +1,16 @@
-# CarlosHub - Gestor Dinámico de Bases de Datos MySQL
+# SimplyDashboard - Gestor Dinámico de Bases de Datos MySQL
 
-**CarlosHub** es una aplicación web en PHP diseñada para administrar, explorar y realizar operaciones CRUD (Crear, Leer, Actualizar y Eliminar) sobre cualquier base de datos **MySQL / MariaDB** de forma completamente dinámica y sin necesidad de declarar modelos o esquemas previos.
+**SimplyDashboard** es una aplicación web en PHP diseñada para administrar, explorar y realizar operaciones CRUD (Crear, Leer, Actualizar y Eliminar) sobre cualquier base de datos **MySQL / MariaDB** de forma completamente dinámica y sin necesidad de declarar modelos o esquemas previos.
 
 ---
 
 ## 🚀 ¿Cómo Funciona la Arquitectura? El poder de `INFORMATION_SCHEMA`
 
-En lugar de requerir que el desarrollador programe archivos o modelos para cada tabla, **CarlosHub inspecciona en tiempo real el diccionario de metadatos interno de MySQL (`INFORMATION_SCHEMA`)**:
+En lugar de requerir que el desarrollador programe archivos o modelos para cada tabla, **SimplyDashboard inspecciona en tiempo real el diccionario de metadatos interno de MySQL (`INFORMATION_SCHEMA`)**:
 
 ```mermaid
 flowchart TD
-    A[Usuario navega en CarlosHub] --> B[inicializaciones.php - Conexión PDO]
+    A[Usuario navega en SimplyDashboard] --> B[inicializaciones.php - Conexión PDO]
     B --> C{INFORMATION_SCHEMA}
     C -->|TABLES| D[Lista tablas existentes en Dashboard]
     C -->|COLUMNS| E[Detecta columnas, tipos y campos de fotos]
@@ -89,7 +89,7 @@ El proyecto cuenta con múltiples capas de seguridad activas:
 ## 📁 Estructura del Código
 
 ```text
-CarlosHub/
+SimplyDashboard/
 ├── db_Slect.php               # Selector visual de bases de datos MySQL
 ├── inicializaciones.php        # Conexión PDO, constantes BASE_URL y funciones de seguridad
 ├── style.css                  # Estilos del selector y bienvenida
@@ -124,10 +124,10 @@ CarlosHub/
    - Servidor web Apache (incluido en XAMPP).
 
 2. **Instalación local:**
-   - Clona este repositorio o copia la carpeta en `C:\xampp\htdocs\CarlosHub`.
+   - Clona este repositorio o copia la carpeta en `C:\xampp\htdocs\SimplyDashboard`.
    - Abre el **Panel de Control de XAMPP** e inicia los módulos **Apache** y **MySQL**.
    - Accede desde tu navegador web a:
      ```
-     http://localhost/CarlosHub/db_Slect.php
+     http://localhost/SimplyDashboard/db_Slect.php
      ```
    - Selecciona cualquier base de datos existente para empezar a gestionarla de inmediato.

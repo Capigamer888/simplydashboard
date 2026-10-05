@@ -1,6 +1,6 @@
 <?php
 /**
- * CarlosHub - Formulario de Edición Universal de Registros (Edit)
+ * SimplyDashboard - Formulario de Edición Universal de Registros (Edit)
  * 
  * Este archivo utiliza los metadatos de MySQL (`INFORMATION_SCHEMA.KEY_COLUMN_USAGE`
  * e `INFORMATION_SCHEMA.COLUMNS`) para:
@@ -105,7 +105,7 @@ foreach ($allColsInfo as $colInfo) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Editar en <?= e($table) ?> | CarlosHub</title>
+    <title>Editar en <?= e($table) ?> | SimplyDashboard</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>

@@ -1,6 +1,6 @@
 <?php
 /**
- * CarlosHub - Selector de Base de Datos MySQL
+ * SimplyDashboard - Selector de Base de Datos MySQL
  * 
  * Este archivo permite al usuario listar y seleccionar una de las bases de datos
  * disponibles en el servidor MySQL local. Filtra automáticamente las bases de datos
@@ -32,14 +32,14 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seleccionar Base de Datos | CarlosHub</title>
+    <title>Seleccionar Base de Datos | SimplyDashboard</title>
     <link rel="stylesheet" href="<?= BASE_URL ?>/style.css">
 </head>
 <body>
     <!-- Pantalla de bienvenida interactiva (desaparece al hacer clic) -->
     <div class="welcome-overlay" id="welcomeOverlay" onclick="this.classList.add('hidden')">
         <div class="welcome-content">
-            <h1>CarlosHub</h1>
+            <h1>SimplyDashboard</h1>
             <h2>Gestor Dinámico de Bases de Datos MySQL</h2>
             <p style="margin-top: 15px; opacity: 0.8; font-size: 0.95rem;">Haz clic para comenzar</p>
         </div>
