@@ -1,0 +1,5 @@
+# Desactivar ejecución de scripts PHP en la carpeta de subidas de fotos
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|phps)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>

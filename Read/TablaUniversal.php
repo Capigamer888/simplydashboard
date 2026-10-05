@@ -1,33 +1,119 @@
 <?php
-include __DIR__ . '/../inicializaciones.php';
+/**
+ * CarlosHub - Visualización Universal de Tablas (Read)
+ * 
+ * Este archivo inspecciona metadatos de MySQL mediante `INFORMATION_SCHEMA.COLUMNS`
+ * e `INFORMATION_SCHEMA.KEY_COLUMN_USAGE` para:
+ * 1. Validar que la tabla solicitada exista en la base de datos (prevención de inyección SQL).
+ * 2. Obtener todas las columnas de la tabla para construir una consulta dinámica.
+ * 3. Identificar la clave primaria (PRIMARY KEY) para las operaciones de edición y eliminación.
+ * 4. Construir un buscador universal parametrizado que filtra por cualquier campo de texto.
+ * 5. Renderizar imágenes automáticamente si los valores corresponden a formatos gráficos válidos.
+ */
 
-$table = isset($_GET['tbl']) ? $_GET['tbl'] : '';
-$busqueda = isset($_GET['busqueda']) ? $_GET['busqueda'] : '';
-$mostrar = isset($_GET['mostrar']) ? max(1, (int)$_GET['mostrar']) : 10;
+require_once __DIR__ . '/../inicializaciones.php';
+
+// Sanitización de parámetros GET recibidos
+$table    = sanitize_input($_GET['tbl'] ?? '');
+$busqueda = sanitize_input($_GET['busqueda'] ?? '');
+$mostrar  = isset($_GET['mostrar']) ? max(1, min(100, (int)$_GET['mostrar'])) : 10;
+
+// Valida que el nombre de la tabla cumpla con el formato de identificador seguro
+if ($table === '' || !is_valid_identifier($table)) {
+    header("Location: " . BASE_URL . "/Dashboard/dashboard.php");
+    exit;
+}
+
+// 1. Obtener la lista de tablas autorizadas usando INFORMATION_SCHEMA.TABLES (Lista blanca)
+$stmtTables = $conn->prepare("
+    SELECT TABLE_NAME 
+    FROM INFORMATION_SCHEMA.TABLES 
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
+");
+$stmtTables->execute();
+$tablasValidas = $stmtTables->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+if (!in_array($table, $tablasValidas, true)) {
+    die("Error de seguridad: La tabla solicitada no existe en la base de datos.");
+}
+
+// 2. Obtener las columnas de la tabla activa consultando INFORMATION_SCHEMA.COLUMNS
+$stmtColumns = $conn->prepare("
+    SELECT COLUMN_NAME, DATA_TYPE, COLUMN_KEY 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = ?
+    ORDER BY ORDINAL_POSITION ASC
+");
+$stmtColumns->execute([$table]);
+$columnsInfo = $stmtColumns->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$columns = array_column($columnsInfo, 'COLUMN_NAME');
+
+// 3. Detectar la Clave Primaria (PK) mediante INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+$stmtPk = $conn->prepare("
+    SELECT COLUMN_NAME 
+    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+    WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = ? 
+      AND CONSTRAINT_NAME = 'PRIMARY'
+    LIMIT 1
+");
+$stmtPk->execute([$table]);
+$primaryKeyCol = (string)($stmtPk->fetchColumn() ?: (!empty($columns) ? $columns[0] : 'id'));
+
+$results = [];
+
+// 4. Ejecución de la consulta con soporte para búsqueda universal parametrizada
+if (!empty($columns)) {
+    if ($busqueda !== '') {
+        // Construcción dinámica de condiciones OR con parámetros nombrados seguros (:b0, :b1, etc.)
+        $whereParts = [];
+        $params = [];
+        foreach ($columns as $idx => $colName) {
+            $paramPlaceholder = ":b{$idx}";
+            $whereParts[] = "`{$colName}` LIKE {$paramPlaceholder}";
+            $params[$paramPlaceholder] = '%' . $busqueda . '%';
+        }
+        $whereSql = implode(' OR ', $whereParts);
+        $sql = "SELECT * FROM `{$table}` WHERE {$whereSql} LIMIT {$mostrar}";
+        $stmtQuery = $conn->prepare($sql);
+        $stmtQuery->execute($params);
+        $results = $stmtQuery->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } else {
+        $sql = "SELECT * FROM `{$table}` LIMIT {$mostrar}";
+        $stmtQuery = $conn->prepare($sql);
+        $stmtQuery->execute();
+        $results = $stmtQuery->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+}
+
+// Ruta física donde se almacenan las fotos subidas
+$ruta_foto = BASE_URL . "/Foto/";
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tabla: <?= htmlspecialchars($table) ?></title>
+    <title>Tabla: <?= e($table) ?> | CarlosHub</title>
     <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
     <div class="container">
+        <!-- Barra de cabecera con navegación -->
         <div class="header-bar">
-            <h1>Tabla: <span><?= htmlspecialchars($table) ?></span></h1>
-            <a href="<?= BASE_URL ?>/Dashboard/dashboard.php" class="back-link">&larr; Volver</a>
-            
+            <h1>Tabla: <span><?= e($table) ?></span></h1>
+            <a href="<?= BASE_URL ?>/Dashboard/dashboard.php" class="back-link">&larr; Volver al Dashboard</a>
         </div>
 
+        <!-- Formulario de búsqueda universal y límite de filas -->
         <form method="GET" class="search-bar">
-            <input type="hidden" name="tbl" value="<?= htmlspecialchars($table) ?>">
+            <input type="hidden" name="tbl" value="<?= e($table) ?>">
             <input
                 type="text"
                 name="busqueda"
-                placeholder="Buscar por nombre..."
-                value="<?= htmlspecialchars($busqueda) ?>"
+                placeholder="Buscar en todos los campos..."
+                value="<?= e($busqueda) ?>"
                 class="search-input"
             >
             <input
@@ -35,120 +121,100 @@ $mostrar = isset($_GET['mostrar']) ? max(1, (int)$_GET['mostrar']) : 10;
                 name="mostrar"
                 min="1"
                 max="100"
-                value="<?= htmlspecialchars((string)$mostrar) ?>"
+                value="<?= e((string)$mostrar) ?>"
                 class="search-input"
                 style="width: 120px;"
-                placeholder="Mostrar"
+                title="Límite de registros a mostrar"
             >
             <button type="submit" class="search-btn">Buscar</button>
-            <button type="button" class="search-btn" onclick="window.location.href='<?= BASE_URL ?>/Read/TablaUniversal.php?tbl=<?php echo urlencode($table); ?>';">Reiniciar</button>
-            <button type="button" class="search-btn" onclick="window.location.href='<?= BASE_URL ?>/Insert/InsertUniversal.php?tbl=<?php echo urlencode($table); ?>';">Insertar</button>
+            <button type="button" class="search-btn" onclick="window.location.href='<?= BASE_URL ?>/Read/TablaUniversal.php?tbl=<?= urlencode($table) ?>';">Reiniciar</button>
+            <button type="button" class="search-btn" style="background:#059669;" onclick="window.location.href='<?= BASE_URL ?>/Insert/InsertUniversal.php?tbl=<?= urlencode($table) ?>';">+ Insertar</button>
         </form>
-        <?php
-            $tablas = $conn->prepare(
-                "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
-                WHERE TABLE_SCHEMA = DATABASE()"
-            );
-            $tablas->execute();
-            $tablasResult = $tablas->fetchAll(PDO::FETCH_ASSOC);
 
-            echo "<details>";
-            echo "<summary>Otras tablas</summary>";
-            for ($i = 0; $i < count($tablasResult); $i++) {
-                $tableName = $tablasResult[$i]['TABLE_NAME'];
-                echo "<div><a href='" . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($tableName) . "'>" . htmlspecialchars($tableName) . "</a></div>";
-            }
-            echo "</details>";
-        ?>
+        <!-- Menú lateral colapsable con las demás tablas de la base de datos -->
+        <details>
+            <summary>Otras tablas (<?= count($tablasValidas) ?>)</summary>
+            <?php foreach ($tablasValidas as $tName): ?>
+                <div>
+                    <a href="<?= BASE_URL ?>/Read/TablaUniversal.php?tbl=<?= urlencode($tName) ?>" style="<?= ($tName === $table) ? 'font-weight: bold; color: #ffffff;' : '' ?>">
+                        <?= e($tName) ?>
+                    </a>
+                </div>
+            <?php endforeach; ?>
+        </details>
 
-        <?php
-            if (!empty($table)) {
-                $key = $conn->prepare("SELECT TABLE_NAME, COLUMN_NAME
-                FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                AND TABLE_NAME = ?");
-            $key->execute([$table]);
-            $key_result = $key->fetchAll();
-                $columns = array_column($key_result, 'COLUMN_NAME');
+        <!-- Tabla dinámica de registros -->
+        <?php if (!empty($results)): ?>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 45px; text-align: center;">#</th>
+                            <?php foreach (array_keys($results[0]) as $colName): ?>
+                                <th>
+                                    <?= e($colName) ?>
+                                    <?php if ($colName === $primaryKeyCol): ?>
+                                        <span title="Clave Primaria">🔑</span>
+                                    <?php endif; ?>
+                                </th>
+                            <?php endforeach; ?>
+                            <th style="width: 70px; text-align: center;">Editar</th>
+                            <th style="width: 70px; text-align: center;">Eliminar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($results as $index => $row): ?>
+                            <tr>
+                                <td class="row-number"><?= $index + 1 ?></td>
+                                <?php foreach ($row as $colName => $value): ?>
+                                    <td>
+                                        <?php if ($value === null): ?>
+                                            <span style="color: #94a3b8; font-style: italic;">NULL</span>
+                                        <?php elseif (is_string($value) && preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $value)): ?>
+                                            <!-- Previsualización de imagen si el campo termina en extensión gráfica -->
+                                            <img style="width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1;" 
+                                                 src="<?= e($ruta_foto . $value) ?>" 
+                                                 alt="Foto"
+                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+                                            <span style="display:none;"><?= e((string)$value) ?></span>
+                                        <?php else: ?>
+                                            <?= e((string)$value) ?>
+                                        <?php endif; ?>
+                                    </td>
+                                <?php endforeach; ?>
 
-                // Build a unique named placeholder per column
-                $whereParts = [];
-                $params = [];
-                foreach ($columns as $i => $a) {
-                    $placeholder = ":busqueda$i";
-                    $whereParts[] = "`$a` LIKE $placeholder";
-                    $params[$placeholder] = '%' . $busqueda . '%';
-                }
-                $whereClause = implode(' OR ', $whereParts); //array_map no funciono
+                                <?php
+                                $rowId = (string)($row[$primaryKeyCol] ?? reset($row) ?? '');
+                                $editUrl = BASE_URL . '/Edit/EditarUniversal.php?id=' . urlencode($rowId) . '&tbl=' . urlencode($table);
+                                ?>
+                                <!-- Enlace de edición seguro -->
+                                <td style="text-align: center;">
+                                    <a class="action-link edit" href="<?= e($editUrl) ?>">Editar</a>
+                                </td>
 
-                if (!empty($busqueda)) {
-                    $query = $conn->prepare("SELECT * FROM `$table` WHERE $whereClause");
-                    $query->execute($params);
-                    $results = $query->fetchAll(PDO::FETCH_ASSOC);
-                } else {
-                    $query = $conn->prepare("SELECT * FROM `$table`");
-                    $query->execute();
-                    $results = $query->fetchAll(PDO::FETCH_ASSOC);
-                }
+                                <!-- Botón de eliminación seguro con confirmación JavaScript -->
+                                <td style="text-align: center;">
+                                    <button class="action-link delete" type="button" onclick="confirmarEliminar(<?= htmlspecialchars(json_encode($rowId), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($primaryKeyCol), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($table), ENT_QUOTES, 'UTF-8') ?>)">
+                                        Eliminar
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <p class="no-results">
+                No se encontraron registros en la tabla <strong><?= e($table) ?></strong><?= $busqueda !== '' ? ' para el criterio de búsqueda ingresado.' : '.' ?>
+            </p>
+        <?php endif; ?>
 
-                if (!empty($results)) {
-                    $results = array_slice($results, 0, $mostrar);
-                }
-            } else {
-                $results = [];
-            }
-
-            $ruta_foto = BASE_URL . "/Foto/";
-            $allowed_exts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-            
-            if (!empty($results)) {
-                echo "<div class='table-wrapper'>";
-                echo "<table>";
-                echo "<tr>";
-                echo "<th>Numero</th>";
-                $columns = array_keys($results[0]);
-                for ($i = 0; $i < count($columns); $i++) {//toco cambiar el foreach por for para poder usar el indice y mostrar el numero de fila
-                    echo "<th>" . htmlspecialchars($columns[$i]) . "</th>";
-                }
-                echo "<th>Editar</th>";
-                echo "<th>Eliminar</th>";
-                echo "</tr>";
-                // Nombre de la primera columna (usada como id por defecto)
-                $firstColumn = array_key_first($results[0]);
-                for ($i = 0; $i < count($results); $i++) {
-                    $row = $results[$i];
-                    echo "<tr>";
-                    echo "<td class='row-number'>" . ($i + 1) . "</td>";
-                    $values = array_values($row);
-                    for ($j = 0; $j < count($values); $j++) {
-                        $value = $values[$j];
-                        if (preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', (string)$value, $coincidencias)) {
-                            echo "<td><img style='width: 100px; height: 100px; object-fit: cover;' src='" . htmlspecialchars($ruta_foto . $value) . "' alt='Foto'></td>";
-                        } else {
-                            echo "<td>" . htmlspecialchars((string)$value) . "</td>";
-                        }
-                    }
-
-                    // ID y URLs seguros
-                    $id = $row[$firstColumn];
-                    $editUrl = BASE_URL . '/Edit/EditarUniversal.php?id=' . urlencode((string)$id) . '&tbl=' . urlencode($table);
-                    echo "<td><a class='action-link edit' href='" . htmlspecialchars($editUrl) . "'>Editar</a></td>";
-
-                    // Construir onclick seguro con json_encode para evitar inyección
-                    $onclick = 'eliminar(' . json_encode((string)$id) . ', ' . json_encode((string)$firstColumn) . ', ' . json_encode((string)$table) . ')';
-                    echo "<td><button class='action-link delete' type='button' onclick='" . htmlspecialchars($onclick, ENT_QUOTES) . "'>Eliminar</button></td>";
-
-                    echo "</tr>";
-                }
-                echo "</table>";
-                echo "</div>";
-            } else {
-                echo "<p class='no-results'>No se encontraron resultados para la búsqueda en la tabla '" . htmlspecialchars($table) . "'.</p>";
-            }
-        ?>
         <script>
-            function eliminar(id, col, table) {
-                if (confirm('¿Desea eliminar la fila con id: ' + id + '?')) {
+            /**
+             * Muestra un diálogo de confirmación antes de eliminar una fila permanentemente.
+             */
+            function confirmarEliminar(id, col, table) {
+                if (confirm('¿Desea eliminar la fila con ' + col + ' = "' + id + '"? Esta acción no se puede deshacer.')) {
                     window.location.href = '<?= BASE_URL ?>/Delete/DeleteUniversal.php?tbl=' + encodeURIComponent(table) + '&col=' + encodeURIComponent(col) + '&id=' + encodeURIComponent(id);
                 }
             }

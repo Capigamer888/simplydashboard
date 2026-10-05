@@ -1,80 +1,160 @@
 <?php
+/**
+ * CarlosHub - Procesamiento de Inserción de Registros (Insert Action)
+ * 
+ * Este archivo recibe los datos del formulario de inserción y realiza:
+ * 1. Sanitización de parámetros y validación de la tabla contra INFORMATION_SCHEMA.
+ * 2. Cálculo o verificación de clave primaria única para evitar duplicados.
+ * 3. Procesamiento y almacenamiento seguro de imágenes en la carpeta `Foto/`.
+ * 4. Detección de columnas que admiten valores nulos (`IS_NULLABLE`) para insertar `NULL` en campos vacíos.
+ * 5. Inserción de datos utilizando sentencias preparadas parametrizadas en PDO.
+ */
 
-include __DIR__ . '/../inicializaciones.php';
-$table = isset($_GET['tbl']) ? (string)$_GET['tbl'] : '';
-$col = isset($_GET['col']) ? (string)$_GET['col'] : '';
+require_once __DIR__ . '/../inicializaciones.php';
 
+// Validación del método HTTP POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    die('Método no permitido');
+    die("Método no permitido.");
 }
 
-if ($table === '' || $col === '') {
-    die('Falta la tabla o la columna primaria para insertar.');
+// Sanitización de parámetros GET
+$table = sanitize_input($_GET['tbl'] ?? '');
+$col   = sanitize_input($_GET['col'] ?? '');
+
+if ($table === '' || !is_valid_identifier($table)) {
+    die("Error: Parámetros de tabla no válidos.");
 }
 
-// Datos del formulario
-$id = $_POST[$col] ?? ''; //id = $_POST[$pk_column], $pk_column es la columna con pk entonces 
-if ($id === '') {
-    $row = $conn->query("SELECT COALESCE(MAX(CAST(`$col` AS UNSIGNED)), 0) + 1 AS next_id FROM `$table`")->fetch();
-    $id = (string)($row['next_id'] ?? '1');
+// 1. Validar columnas autorizadas y nulabilidad mediante INFORMATION_SCHEMA.COLUMNS
+$stmtCols = $conn->prepare("
+    SELECT COLUMN_NAME, IS_NULLABLE 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = ?
+");
+$stmtCols->execute([$table]);
+$colsInfo = $stmtCols->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$validColumns = array_column($colsInfo, 'COLUMN_NAME');
+
+if (empty($validColumns)) {
+    die("Error: La tabla especificada no existe.");
 }
 
-$foto_dir = PROJECT_ROOT . DIRECTORY_SEPARATOR . 'Foto';
-foreach ($_FILES as $foto_columna => $archivo) {
+$nullableMap = [];
+foreach ($colsInfo as $c) {
+    $nullableMap[$c['COLUMN_NAME']] = (strtoupper($c['IS_NULLABLE'] ?? '') === 'YES');
+}
+
+// 2. Manejo de Clave Primaria: Si el usuario dejó el ID vacío, calcular el siguiente
+$id = isset($_POST[$col]) ? trim((string)$_POST[$col]) : '';
+if ($id === '' && $col !== '' && is_valid_identifier($col)) {
+    try {
+        $stmtNext = $conn->query("SELECT COALESCE(MAX(CAST(`{$col}` AS UNSIGNED)), 0) + 1 AS next_id FROM `{$table}`");
+        $id = (string)($stmtNext->fetchColumn() ?: '1');
+        $_POST[$col] = $id;
+    } catch (PDOException $e) {
+        $id = '';
+    }
+}
+
+// 3. Procesamiento seguro de imágenes enviadas mediante $_FILES
+$fotoDir = PROJECT_ROOT . DIRECTORY_SEPARATOR . 'Foto';
+$allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+
+foreach ($_FILES as $fotoCol => $archivo) {
+    if (!in_array($fotoCol, $validColumns, true)) {
+        continue;
+    }
+
     if ($archivo['error'] === UPLOAD_ERR_NO_FILE) {
         continue;
     }
 
     if ($archivo['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($archivo['tmp_name'])) {
-        die('Error al subir la foto.');
+        die("Error al subir el archivo de imagen.");
     }
 
-    $imagen = @getimagesize($archivo['tmp_name']);
-    if ($imagen === false) {
-        die('El archivo seleccionado no es una imagen válida.');
+    // Comprobación de imagen gráfica válida
+    if (@getimagesize($archivo['tmp_name']) === false) {
+        die("El archivo subido no es una imagen válida.");
     }
 
-    $nombre_original = basename($archivo['name']);
-    $nombre_original = preg_replace('/[^A-Za-z0-9._-]/', '_', $nombre_original);
-    $nombre_tabla = preg_replace('/[^A-Za-z0-9_-]/', '_', $table);
-    $nombre_id = preg_replace('/[^A-Za-z0-9_-]/', '_', (string)$id);
-    $nombre_foto = $nombre_tabla . '_' . $nombre_id . '_' . $nombre_original;
-
-    if (!is_dir($foto_dir) && !mkdir($foto_dir, 0755, true)) {
-        die('No se pudo crear la carpeta Foto.');
+    // Comprobación de extensión permitida
+    $ext = strtolower(pathinfo($archivo['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowedExts, true)) {
+        die("Extensión de imagen no permitida: ." . e($ext));
     }
 
-    if (!move_uploaded_file($archivo['tmp_name'], $foto_dir . DIRECTORY_SEPARATOR . $nombre_foto)) {
-        die('No se pudo guardar la foto.');
+    // Nombre único aleatorio para evitar sobreescritura accidental
+    $safeTable  = preg_replace('/[^A-Za-z0-9_-]/', '_', $table);
+    $safeId     = preg_replace('/[^A-Za-z0-9_-]/', '_', (string)$id);
+    $nombreFoto = $safeTable . '_' . $safeId . '_' . time() . '_' . bin2hex(random_bytes(3)) . '.' . $ext;
+
+    if (!is_dir($fotoDir) && !mkdir($fotoDir, 0755, true)) {
+        die("No se pudo crear la carpeta para almacenar fotos.");
     }
 
-    $_POST[$foto_columna] = $nombre_foto;
+    if (!move_uploaded_file($archivo['tmp_name'], $fotoDir . DIRECTORY_SEPARATOR . $nombreFoto)) {
+        die("Error al guardar la imagen en el servidor.");
+    }
+
+    $_POST[$fotoCol] = $nombreFoto;
 }
 
-// Evitar duplicados: si el id ya existe, no insertar
-$check = $conn->prepare("SELECT COUNT(*) AS c FROM `$table` WHERE `$col` = ?");
-$check->execute([$id]);
-$exists = (int)($check->fetch()['c'] ?? 0);
-if ($exists > 0) {
-    die('Error: ya existe un registro con ' . htmlspecialchars($col) . ' = ' . htmlspecialchars($id));
-}
-$camposObligatorios = [];
-foreach($_POST as $key => $value) {
-    $camposObligatorios[$key] = $value;
-}
-foreach ($camposObligatorios as $k => $v) {
-    if ($v === '') {
-        die('Falta el campo obligatorio: ' . $k);
+// 4. Verificación de duplicados para la clave primaria
+if ($col !== '' && in_array($col, $validColumns, true) && $id !== '') {
+    $stmtCheck = $conn->prepare("SELECT COUNT(*) FROM `{$table}` WHERE `{$col}` = ?");
+    $stmtCheck->execute([$id]);
+    if ((int)$stmtCheck->fetchColumn() > 0) {
+        die("Error: Ya existe un registro con " . e($col) . " = '" . e($id) . "'.");
     }
 }
 
-$columnas = implode(', ', array_keys($camposObligatorios));
-$valores = ':' . implode(', :', array_keys($camposObligatorios));
+// 5. Construcción dinámica de la sentencia INSERT con parámetros seguros
+$insertFields = [];
+$insertValues = [];
+$params = [];
+$idx = 0;
+
+foreach ($_POST as $colName => $val) {
+    if (!in_array($colName, $validColumns, true)) {
+        continue;
+    }
+
+    $cleanVal = is_string($val) ? trim($val) : $val;
+
+    // Si el ID está vacío y la columna es autoincremental, se omite para que MySQL la asigne
+    if ($colName === $col && $cleanVal === '') {
+        continue;
+    }
+
+    $placeholder = ":p_{$idx}";
+    $insertFields[] = "`{$colName}`";
+    $insertValues[] = $placeholder;
+
+    if ($cleanVal === '') {
+        $params[$placeholder] = ($nullableMap[$colName] ?? true) ? null : '';
+    } else {
+        $params[$placeholder] = $cleanVal;
+    }
+
+    $idx++;
+}
+
+if (empty($insertFields)) {
+    die("Error: No se proporcionaron campos válidos para insertar.");
+}
+
 try {
-    $sql = $conn->prepare("INSERT INTO $table ($columnas) VALUES ($valores)");
-    $sql->execute($camposObligatorios);/*PDO recibe el array $camposObligatorios dentro de execute() y asume la responsabilidad de escapar las comillas de la hora 08:30:00*/
+    $colsSql = implode(', ', $insertFields);
+    $valsSql = implode(', ', $insertValues);
+
+    $sql = "INSERT INTO `{$table}` ({$colsSql}) VALUES ({$valsSql})";
+    $stmtInsert = $conn->prepare($sql);
+    $stmtInsert->execute($params);
+
     header("Location: " . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($table));
+    exit;
 } catch (PDOException $e) {
-    die('Error al insertar en la base de datos: ' . $e->getMessage());
+    die("Error al insertar el registro en la base de datos: " . e($e->getMessage()));
 }
-/* Despues de 2 hr, 30 minutos de investigacion de funciones y 50gr de azucar el codigo fue completado con exito */

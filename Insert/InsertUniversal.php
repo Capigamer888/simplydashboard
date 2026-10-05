@@ -1,216 +1,189 @@
 <?php
-include __DIR__ . '/../inicializaciones.php';
+/**
+ * CarlosHub - Formulario de Inserción Universal de Registros (Insert)
+ * 
+ * Este archivo consulta el diccionario de datos de MySQL (`INFORMATION_SCHEMA`) para:
+ * 1. Validar la tabla en la que se insertará el nuevo registro.
+ * 2. Identificar la Clave Primaria (PK) y calcular de forma predictiva el siguiente ID secuencial.
+ * 3. Identificar las Claves Foráneas (FK) y poblar menús desplegables con las filas existentes en las tablas padre.
+ * 4. Clasificar columnas para la subida de imágenes y columnas de captura estándar.
+ */
 
-// Primary Key de la tabla
-//    SELECT TABLE_NAME, COLUMN_NAME
-//    FROM INFORMATION_SCHEMA.COLUMNS
-//    WHERE TABLE_SCHEMA = DATABASE()
-//      AND TABLE_NAME = ?
-//      AND COLUMN_KEY = 'PRI'
-$table = $_GET['tbl'];
-$pk = $conn->prepare("SELECT TABLE_NAME, COLUMN_NAME
-    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-    WHERE TABLE_SCHEMA = database()
-      AND TABLE_NAME = ?
-      AND CONSTRAINT_NAME = 'PRIMARY'");
-$pk->execute([ $table]);
-$pk_result = $pk->fetchAll();
-$pk_column = !empty($pk_result) ? (string)$pk_result[0]['COLUMN_NAME'] : '';
+require_once __DIR__ . '/../inicializaciones.php';
 
+// Sanitización del nombre de la tabla recibido por GET
+$table = sanitize_input($_GET['tbl'] ?? '');
 
-// Foreign Keys de la tabla (incluye tabla y columna referenciada)
-$fk = $conn->prepare("SELECT TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
-    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-    WHERE TABLE_SCHEMA = database()
-      AND TABLE_NAME = ?
-      AND REFERENCED_TABLE_NAME IS NOT NULL");
-$fk->execute([ $table]);
-$fk_result = $fk->fetchAll();
-$pk_columns = array_values(array_unique(array_filter(array_column($pk_result, 'COLUMN_NAME'), fn($value) => is_string($value) && $value !== '')));
-$fk_columns = array_values(array_unique(array_filter(array_column($fk_result, 'COLUMN_NAME'), fn($value) => is_string($value) && $value !== '')));
-//echo json_encode(array_values($pk_result)[0]['COLUMN_NAME']);
-//echo json_encode(array_values($fk_result)[1]['COLUMN_NAME']);
-// Columnas que NO son PK ni FK, solo de esa tabla
-$non_key = $conn->prepare("SELECT TABLE_NAME, COLUMN_NAME
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = ?
-      AND COLUMN_KEY IN ('', 'UNI')
-    AND COLUMN_COMMENT NOT IN ('foto')
-    AND LOWER(COLUMN_NAME) NOT IN ('foto', 'imagen', 'image')
-      
-");/*Aunque un if $non_key_result[DATA_TYPE] para identificar los tipo foto ubiera servido*/
-$non_key->execute([ $table]);
-$non_key_result = $non_key->fetchAll();
-$non_key_result = array_values(array_filter($non_key_result, function ($row) use ($pk_columns, $fk_columns) {
-    $col_name = (string)($row['COLUMN_NAME'] ?? '');
-    return $col_name !== ''
-        && !in_array($col_name, $pk_columns, true)
-        && !in_array($col_name, $fk_columns, true);
-}));
+if ($table === '' || !is_valid_identifier($table)) {
+    header("Location: " . BASE_URL . "/Dashboard/dashboard.php");
+    exit;
+}
 
-$fotos = $conn->prepare("SELECT TABLE_NAME, COLUMN_NAME
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = ?
-      AND COLUMN_KEY = ''
-    AND (COLUMN_COMMENT = 'foto' OR LOWER(COLUMN_NAME) IN ('foto', 'imagen', 'image'))
+// 1. Obtener la Clave Primaria (PK) consultando INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+$stmtPk = $conn->prepare("
+    SELECT COLUMN_NAME 
+    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+    WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = ? 
+      AND CONSTRAINT_NAME = 'PRIMARY'
 ");
-$fotos->execute([$table]);
-$fotos_result = $fotos->fetchAll();
-?>
+$stmtPk->execute([$table]);
+$pkColumns = $stmtPk->fetchAll(PDO::FETCH_COLUMN) ?: [];
+$primaryKeyCol = !empty($pkColumns) ? $pkColumns[0] : '';
 
+// 2. Obtener las Claves Foráneas (FK) consultando INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+$stmtFk = $conn->prepare("
+    SELECT COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND REFERENCED_TABLE_NAME IS NOT NULL
+");
+$stmtFk->execute([$table]);
+$fkResult = $stmtFk->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$fkColumns = array_column($fkResult, 'COLUMN_NAME');
+
+// 3. Obtener todas las columnas y clasificar fotos vs columnas normales mediante INFORMATION_SCHEMA.COLUMNS
+$stmtCols = $conn->prepare("
+    SELECT COLUMN_NAME, DATA_TYPE, COLUMN_KEY, COLUMN_COMMENT 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = ?
+    ORDER BY ORDINAL_POSITION ASC
+");
+$stmtCols->execute([$table]);
+$allColsInfo = $stmtCols->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$fotoColumns = [];
+$nonKeyColumns = [];
+
+foreach ($allColsInfo as $colInfo) {
+    $cName    = $colInfo['COLUMN_NAME'];
+    $comment  = strtolower((string)($colInfo['COLUMN_COMMENT'] ?? ''));
+    $cNameLow = strtolower($cName);
+
+    if (in_array($cName, $pkColumns, true) || in_array($cName, $fkColumns, true)) {
+        continue;
+    }
+
+    if ($comment === 'foto' || in_array($cNameLow, ['foto', 'imagen', 'image', 'avatar'], true)) {
+        $fotoColumns[] = $cName;
+    } else {
+        $nonKeyColumns[] = $cName;
+    }
+}
+
+/**
+ * Calcula de forma automática el siguiente ID disponible para la tabla si es numérico.
+ */
+function calcularSiguienteId(PDO $conn, string $table, string $pkCol): string {
+    if ($pkCol === '' || !is_valid_identifier($table) || !is_valid_identifier($pkCol)) {
+        return '1';
+    }
+    try {
+        $stmt = $conn->query("SELECT COALESCE(MAX(CAST(`{$pkCol}` AS UNSIGNED)), 0) + 1 AS next_id FROM `{$table}`");
+        $res = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (string)($res['next_id'] ?? '1');
+    } catch (PDOException $e) {
+        return '';
+    }
+}
+
+$siguienteId = ($primaryKeyCol !== '') ? calcularSiguienteId($conn, $table, $primaryKeyCol) : '';
+?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Insertar en <?= e($table) ?> | CarlosHub</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <script>
-    function previewImage(input) {
-        if (input.files && input.files[0]) {
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById(input.dataset.preview).src = e.target.result;
+        /**
+         * Permite previsualizar la imagen cargada antes de enviar el formulario.
+         */
+        function previewImage(input) {
+            if (input.files && input.files[0]) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var preview = document.getElementById(input.dataset.preview);
+                    if (preview) {
+                        preview.src = e.target.result;
+                    }
+                };
+                reader.readAsDataURL(input.files[0]);
             }
-            reader.readAsDataURL(input.files[0]);
         }
-    }
     </script>
-    <a class="action-link" href='<?= BASE_URL ?>/Read/TablaUniversal.php?tbl=<?php echo urlencode($table) ?>'>Regresar</a>
-    <h1><?php echo $table ?></h1>
-    
-    <form method="POST" enctype="multipart/form-data" action="<?= BASE_URL ?>/Insert/InsertUniversal2.php?tbl=<?= urlencode($table) ?>&col=<?= urlencode($pk_column) ?>">
-    <?php
 
-    function obtenerSiguienteId($idActual) {
-        /* 1. Separar el texto de los números usando una expresión regular*/
-        if (preg_match('/^([a-zA-Z]+-)(\d+)$/', $idActual, $coincidencias)) {
-            $prefijo = $coincidencias[1]; // Captura id
-            $numeroActual = (int)$coincidencias[2]; // Captura 001 y lo convierte a entero (1)
-            $longitudDigitos = strlen($coincidencias[2]); // Mide cuántos dígitos tiene (3)
+    <a class="action-link" href="<?= BASE_URL ?>/Read/TablaUniversal.php?tbl=<?= urlencode($table) ?>">&larr; Regresar a <?= e($table) ?></a>
+    <h1>Insertar en <?= e($table) ?></h1>
 
-            // 2. Incrementar el número en 1
-            $siguienteNumero = $numeroActual + 1;
-
-            // 3. Rellenar con ceros a la izquierda y unir con el prefijo
-            $numeroFormateado = str_pad($siguienteNumero, $longitudDigitos, 0, STR_PAD_LEFT);
-            
-            return $prefijo . $numeroFormateado;
-        }
-        
-        return (int)$idActual + 1; // Retorna null si el formato inicial no era válido
-    }
-    //por si fk y pk a la vez, cuenta la cantidad de pks
-    $fks = array_column($fk_result, 'COLUMN_NAME');
-    $pks = array_column($pk_result, 'COLUMN_NAME');    
-
-    foreach ($pk_result as $index => $pk_row) {
-        // estas son las consecuencias de no haber usado COULUMN_KEY = MULTI
-        //$tabla_refi=array_column($fk_result, 'REFERENCED_TABLE_NAME')[$index] ?? null;
-        //$col_refi=array_column($fk_result, 'REFERENCED_COLUMN_NAME')[$index] ?? null;
-
-        $pkName = $pks[$index] ?? null;
-        $fkName = $fks[$index] ?? null;
-        // Calcula el siguiente ID para la clave primaria.
-        $a = $pk_row['COLUMN_NAME'];
-        $ultima_pk = $conn->query("SELECT `$a` FROM `$table` ORDER BY `$a` DESC LIMIT 1");
-        $t = $ultima_pk->fetchColumn();
-        $t = obtenerSiguienteId($t);
-        
-        /*  if (!($pks[$contador_pkfk] === $fks[$contador_pkfk])){
-            echo '<p>' . htmlspecialchars($pk_row['COLUMN_NAME']) .'</p>';
-            echo '<input type="text" name="' . htmlspecialchars($pk_row['COLUMN_NAME']) . '" value="' . htmlspecialchars($t) . '" required>';        echo '<br>';
-            
-        }
-        // Se tuvo que cambiar dado a que soltaba el warning aunque funcionaba completamente normal
-        */
-        //porque hice esto, quien invento las pks y fks a la vez, como es que siquiera tiene sentido 
-        $colit = $pk_row['COLUMN_NAME'];
-        if (in_array($colit, $fks)) {
-            $hay_pkfk=TRUE;
-        } else {
-            $hay_pkfk=FALSE;
-        }
-
-        if ($hay_pkfk === FALSE ){
-            echo '<p>' . htmlspecialchars($pk_row['COLUMN_NAME']) . '</p>';
-            echo '<input type="text" name="' . htmlspecialchars($pk_row['COLUMN_NAME']) . '" value="' . htmlspecialchars($t) . '" required>';
-            echo '<br>';
-        }
-    }
-
-
-    foreach ($fk_result as $index => $fk_row) {  
-        $pkName = $pks[$index] ?? null;
-        $fkName = $fks[$index] ?? null;
-
-        if ($pkName !== null && $fkName !== null && $pkName === $fkName) {
-            continue;
-        } 
-
-        $ref_table  = $fk_row['REFERENCED_TABLE_NAME'];
-        $ref_column = $fk_row['REFERENCED_COLUMN_NAME'];
-        $col_name   = $fk_row['COLUMN_NAME'];
-
-        $stmt = $conn->prepare("SELECT * FROM `$ref_table`");
-        $stmt ->execute();
-        $options = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        echo '<label for="' . htmlspecialchars($col_name) . '">' . htmlspecialchars($col_name) . ':</label>';
-        echo '<select name="' . htmlspecialchars($col_name) . '">';
-        echo '<option value="">-- Selecciona un valor --</option>';
-
-        foreach ($options as $option) {
-            $value = trim((string)($option[$ref_column] ?? ''));
-            if ($value === '') {
+    <form method="POST" enctype="multipart/form-data" action="<?= BASE_URL ?>/Insert/InsertUniversal2.php?tbl=<?= urlencode($table) ?>&col=<?= urlencode($primaryKeyCol) ?>">
+        <?php
+        // Renderizado del campo Clave Primaria (con sugerencia automática del siguiente ID)
+        foreach ($pkColumns as $pkName) {
+            if (in_array($pkName, $fkColumns, true)) {
                 continue;
             }
+            echo '<label for="' . e($pkName) . '">' . e($pkName) . ' (Clave Primaria):</label>';
+            echo '<input type="text" id="' . e($pkName) . '" name="' . e($pkName) . '" value="' . e($siguienteId) . '" placeholder="ID sugerido o escribe uno">';
+            echo '<br>';
+        }
 
-            $label_field = null;
-            foreach (array_keys($option) as $candidate) {
-                if ($candidate !== $ref_column) {
-                    $label_field = $candidate;
-                    break;
-                }
+        // Renderizado de campos con Claves Foráneas: Menús desplegables generados dinámicamente
+        foreach ($fkResult as $fkRow) {
+            $colName   = $fkRow['COLUMN_NAME'];
+            $refTable  = $fkRow['REFERENCED_TABLE_NAME'];
+            $refColumn = $fkRow['REFERENCED_COLUMN_NAME'];
+
+            $options = [];
+            try {
+                $stmtRef = $conn->query("SELECT * FROM `{$refTable}` LIMIT 100");
+                $options = $stmtRef->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            } catch (PDOException $e) {
+                $options = [];
             }
-            $label = $label_field !== null ? trim((string)($option[$label_field] ?? $value)) : $value;
-            $display = $label !== '' ? $label . ': ' . $value : $value;
 
-            echo '<option value="' . htmlspecialchars((string)$value) . '">' . htmlspecialchars((string)$display) . '</option>';
+            echo '<label for="' . e($colName) . '">' . e($colName) . ' (Relación con ' . e($refTable) . '):</label>';
+            echo '<select name="' . e($colName) . '" id="' . e($colName) . '">';
+            echo '<option value="">-- Selecciona un valor --</option>';
+
+            foreach ($options as $opt) {
+                $val = trim((string)($opt[$refColumn] ?? ''));
+                if ($val === '') continue;
+
+                $label = $val;
+                foreach ($opt as $k => $v) {
+                    if ($k !== $refColumn && $v !== null && trim((string)$v) !== '') {
+                        $label = trim((string)$v);
+                        break;
+                    }
+                }
+                echo '<option value="' . e($val) . '">' . e($label . ' (' . $val . ')') . '</option>';
+            }
+
+            echo '</select><br>';
         }
-        echo '</select><br>';
-        
-    }
 
+        // Renderizado de columnas normales de la tabla
+        foreach ($nonKeyColumns as $colName) {
+            echo '<label for="' . e($colName) . '">' . e($colName) . ':</label>';
+            echo '<input type="text" id="' . e($colName) . '" name="' . e($colName) . '"><br>';
+        }
 
-    foreach ($non_key_result as $non_key_row) {
-        $col_name = $non_key_row['COLUMN_NAME'];
-
-        echo '<label for="' . htmlspecialchars($col_name) . '">' . htmlspecialchars($col_name) . ':</label>';
-        echo '<input type="text" name="' . htmlspecialchars($col_name) . '"><br>';
-    }
-    foreach($fotos_result as $fotos_row) {
-        $col_name = $fotos_row['COLUMN_NAME'];
-
-        echo '<label for="' . htmlspecialchars($col_name) . '">' . htmlspecialchars($col_name) . ':</label>';
-        echo '<div class="avatar-container" onclick="document.getElementById(`foto-upload-' . htmlspecialchars($col_name) . '`).click();">';
-        echo '<img style="width: auto; height: 150px;" id="avatar-preview-' . htmlspecialchars($col_name) . '" alt="Foto de Perfil">';
-        echo '</div>';
-        echo '<input type="file" id="foto-upload-' . htmlspecialchars($col_name) . '" name="'. htmlspecialchars($col_name) . '" data-preview="avatar-preview-' . htmlspecialchars($col_name) . '" accept="image/*" onchange="previewImage(this);">';
-        
-    }
-    echo '<input type="submit" value="Insertar">';
-    ?>
+        // Renderizado de campos para subir imágenes
+        foreach ($fotoColumns as $colName) {
+            echo '<label for="foto-upload-' . e($colName) . '">' . e($colName) . ':</label>';
+            echo '<div class="avatar-container" onclick="document.getElementById(\'foto-upload-' . e($colName) . '\').click();">';
+            echo '<img style="width: auto; height: 140px; border-radius: 8px; border: 1px solid #cbd5e1; object-fit: cover;" id="avatar-preview-' . e($colName) . '" alt="Haz clic para seleccionar imagen">';
+            echo '</div>';
+            echo '<input type="file" id="foto-upload-' . e($colName) . '" name="' . e($colName) . '" data-preview="avatar-preview-' . e($colName) . '" accept="image/*" onchange="previewImage(this);">';
+        }
+        ?>
+        <input type="submit" value="Insertar Registro" style="margin-top: 20px;">
     </form>
-    <?php
-        if (empty($table)) {
-            header("Location: " . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($table));
-            exit;
-        }
-    ?>
 </body>
 </html>
