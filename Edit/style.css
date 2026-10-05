@@ -1,0 +1,132 @@
+/* Reseteo básico para asegurar consistencia en distintos navegadores */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f4f7f6;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+}
+
+h1 {
+    margin-bottom: 25px;
+    color: #2c3e50;
+    text-transform: capitalize; /* Útil ya que los nombres de tabla suelen estar en minúscula */
+    font-weight: 600;
+}
+
+/* Contenedor del formulario */
+form {
+    background: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    width: 100%;
+    max-width: 500px;
+}
+
+/* Ocultamos los saltos de línea (<br>) generados por el PHP 
+   para controlar el espaciado exclusivamente con CSS */
+form br {
+    display: none;
+}
+
+/* Estilo para la información de la llave primaria */
+form p {
+    background-color: #e9ecef;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    color: #555;
+    margin-bottom: 20px;
+    border-left: 4px solid #adb5bd;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #495057;
+    margin-top: 15px;
+}
+
+/* Estilos compartidos para todos los campos de entrada */
+input[type="text"],
+input[type="file"],
+input[type="hidden"],
+input[type=""], /* Captura el input de la PK que tiene type="" */
+select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 1em;
+    background-color: #fff;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    margin-bottom: 10px;
+}
+
+/* Efecto de foco para accesibilidad y usabilidad */
+input:focus,
+select:focus {
+    border-color: #4dabf7;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.2);
+}
+
+/* Botón de envío */
+input[type="submit"] {
+    width: 100%;
+    background-color: #339af0;
+    color: white;
+    border: none;
+    padding: 14px;
+    font-size: 1.1em;
+    font-weight: bold;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 25px;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+input[type="submit"]:hover {
+    background-color: #228be6;
+}
+
+input[type="submit"]:active {
+    transform: scale(0.98);
+}
+a{
+    text-decoration: none;
+    padding: 5px 10px; /* Botones de tabla reducidos */
+    border-radius: 4px;
+    color: white;
+    background-color: #339af0;
+    font-size: 0.8rem;
+    font-weight: 500;
+    display: inline-block;
+    transition: background-color 0.2s ease;
+}
+
+a:hover,
+a:focus {
+    background-color: #228be6;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+}
+
+#avatar-preview, #foto-upload{
+    width:auto;
+    height:70px;
+}

@@ -1,0 +1,343 @@
+/* =========================================
+   Variables de Color y Estilo
+   ========================================= */
+:root {
+    --primary-color: #4361ee;
+    --primary-hover: #3a56d4;
+    --bg-color: #f0f2f5;
+    --card-bg: #ffffff;
+    --text-main: #333333;
+    --text-muted: #6c757d;
+    --border-color: #e0e4e8;
+    
+    --sidebar-bg: #1e1f22;
+    --sidebar-hover: #2d2f31;
+    --sidebar-text: #e3e3e3;
+    --sidebar-muted: #9aa0a6;
+    
+    --success-color: #2a9d8f;
+    --success-hover: #21867a;
+    --danger-color: #ef233c;
+    --danger-hover: #d90429;
+    
+    --font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* =========================================
+   Reset y Estilos Base
+   ========================================= */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    line-height: 1.5;
+}
+
+/* =========================================
+   Layout Principal (CSS Grid Corregido)
+   ========================================= */
+.container {
+    max-width: 1200px; /* Reducido para hacer la UI más compacta */
+    margin: 15px auto; /* Márgenes más pequeños */
+    padding: 0 15px;
+    display: grid;
+    /* Usar minmax(0, 1fr) evita que la columna derecha crezca inesperadamente */
+    grid-template-columns: 240px minmax(0, 1fr); 
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+        "header header"
+        "sidebar search"
+        "sidebar table";
+    gap: 15px; /* Espacio entre paneles más pequeño */
+}
+
+.header-bar { grid-area: header; }
+details { grid-area: sidebar; }
+.search-bar { grid-area: search; }
+.table-wrapper, .no-results { grid-area: table; }
+
+/* Tarjetas blancas (más compactas) */
+.header-bar, .search-bar, .table-wrapper, .no-results {
+    background-color: var(--card-bg);
+    padding: 15px; /* Reducido de 20px a 15px */
+    border-radius: 8px;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.05);
+}
+
+/* =========================================
+   Menú Lateral Oscuro
+   ========================================= */
+details {
+    background-color: var(--sidebar-bg);
+    border-radius: 12px;
+    padding: 15px 10px;
+    align-self: start;
+    
+    /* --- NUEVAS REGLAS PARA EL SCROLL --- */
+    max-height: calc(100vh - 40px); /* Altura máxima: el tamaño de tu pantalla menos 40px */
+    overflow-y: auto; /* Activa el scroll solo dentro de este cuadro */
+    position: sticky; /* Hace que el menú te siga si bajas por la página */
+    top: 20px; /* Margen superior cuando el menú te sigue */
+}
+
+/* Personalización del Scrollbar para que se vea moderno y oscuro */
+details::-webkit-scrollbar {
+    width: 6px;
+}
+
+details::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+details::-webkit-scrollbar-thumb {
+    background-color: #3f4145; /* Color del deslizador */
+    border-radius: 10px;
+}
+
+details::-webkit-scrollbar-thumb:hover {
+    background-color: #5a5d61; /* Color al pasar el mouse */
+}
+
+summary {
+    color: var(--sidebar-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 8px 12px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    
+    /* Mantiene el título "Otras tablas" fijo arriba al hacer scroll */
+    position: sticky;
+    top: -15px; 
+    background-color: var(--sidebar-bg);
+    padding-top: 15px;
+}
+
+summary::-webkit-details-marker {
+    display: none;
+}
+
+details div {
+    padding: 1px 5px;
+}
+
+details div a {
+    text-decoration: none;
+    color: var(--sidebar-text);
+    display: block;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+details div a:hover {
+    background-color: var(--sidebar-hover);
+    color: #ffffff;
+}
+
+/* Para ocultar la barra de scroll en móviles donde a veces molesta visualmente */
+@media (max-width: 900px) {
+    details {
+        max-height: 40vh; /* En móviles ocupa menos altura antes de tener scroll */
+        position: relative; /* Quita el sticky en móviles para que no estorbe */
+        top: 0;
+    }
+}
+
+/* =========================================
+   Cabecera (Header)
+   ========================================= */
+.header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-bar h1 {
+    font-size: 1.4rem; /* Letra más pequeña */
+    font-weight: 600;
+}
+
+.header-bar h1 span {
+    color: var(--primary-color);
+}
+
+.back-link {
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.back-link:hover {
+    color: var(--primary-color);
+}
+
+/* =========================================
+   Barra de Búsqueda y Botones
+   ========================================= */
+.search-bar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.search-input {
+    flex: 1;
+    min-width: 150px;
+    padding: 8px 12px; /* Más estrecho */
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.3s ease;
+}
+
+.search-input:focus {
+    border-color: var(--primary-color);
+}
+
+.search-btn {
+    padding: 8px 15px; /* Botones más compactos */
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.3s ease;
+}
+
+.search-btn:hover {
+    background-color: var(--primary-hover);
+}
+
+.search-btn[type="button"] {
+    background-color: #f8f9fa;
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+}
+
+.search-btn[type="button"]:hover {
+    background-color: #e2e6ea;
+}
+
+/* =========================================
+   Tabla de Datos
+   ========================================= */
+.table-wrapper {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    white-space: nowrap;
+}
+
+th, td {
+    padding: 8px 12px; /* Celdas más estrechas */
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.85rem; /* Texto más pequeño */
+}
+
+.table-wrapper table td.row-number {
+    background-color: rgba(67, 97, 238, 0.12) !important;
+    border: 1px solid rgba(67, 97, 238, 0.2);
+    border-radius: 8px;
+    color: #2f4f9f !important;
+    font-weight: 600;
+    text-align: center;
+}
+
+th {
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+tr:hover td {
+    background-color: #f8f9fa;
+}
+
+tr:hover td.row-number {
+    background-color: rgba(67, 97, 238, 0.16) !important;
+    color: #2f4f9f !important;
+}
+
+/* =========================================
+   Botones de Acción (Editar / Eliminar)
+   ========================================= */
+.action-link {
+    text-decoration: none;
+    padding: 5px 10px; /* Botones de tabla reducidos */
+    border-radius: 4px;
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 500;
+    display: inline-block;
+    text-align: center;
+    transition: opacity 0.3s ease;
+}
+
+.action-link:hover {
+    opacity: 0.85;
+}
+
+.action-link.edit { background-color: var(--success-color); }
+.action-link.delete { background-color: var(--danger-color); }
+
+/* =========================================
+   Mensaje Sin Resultados
+   ========================================= */
+.no-results {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    border: 1px dashed var(--border-color);
+    background-color: transparent;
+}
+
+/* =========================================
+   Responsividad (Móviles)
+   ========================================= */
+@media (max-width: 900px) {
+    .container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+        grid-template-areas:
+            "header"
+            "sidebar"
+            "search"
+            "table";
+    }
+    
+    details {
+        min-height: auto;
+        height: auto;
+    }
+}
+button, a{
+    box-shadow:none;
+    border:none;
+    cursor:pointer;
+}
