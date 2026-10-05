@@ -341,3 +341,26 @@ button, a{
     border:none;
     cursor:pointer;
 }
+
+/* =========================================
+   Banners de Alerta (Éxito / Error)
+   ========================================= */
+.alert-banner {
+    grid-column: 1 / -1;
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.alert-banner.error {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+.alert-banner.success {
+    background-color: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}

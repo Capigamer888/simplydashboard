@@ -55,9 +55,10 @@ try {
     $stmtDelete->bindValue(':id', $id, PDO::PARAM_STR);
     $stmtDelete->execute();
 
-    // Redirección exitosa de vuelta a la tabla
-    header("Location: " . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($table));
+    // Redirección exitosa de vuelta a la tabla con mensaje de confirmación
+    header("Location: " . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($table) . "&success=" . urlencode("Registro eliminado correctamente."));
     exit;
 } catch (PDOException $e) {
-    die("Error al eliminar el registro: " . e($e->getMessage()));
+    header("Location: " . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($table) . "&error=" . urlencode("No se pudo eliminar el registro: " . $e->getMessage()));
+    exit;
 }

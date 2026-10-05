@@ -36,6 +36,9 @@ try {
 } catch (PDOException $e) {
     $tables = [];
 }
+
+$errorMessage   = isset($_GET['error']) ? sanitize_input($_GET['error']) : '';
+$successMessage = isset($_GET['success']) ? sanitize_input($_GET['success']) : '';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -47,6 +50,18 @@ try {
 </head>
 <body>
     <div class="container">
+        <?php if (!empty($errorMessage)): ?>
+            <div style="background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.95rem;">
+                <strong>⚠ Atención:</strong> <?= e($errorMessage) ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if (!empty($successMessage)): ?>
+            <div style="background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.95rem;">
+                <strong>✓ Éxito:</strong> <?= e($successMessage) ?>
+            </div>
+        <?php endif; ?>
+
         <h1>Tablas en <span><?= e($activeDb) ?></span></h1>
 
         <!-- Botón para regresar a seleccionar otra base de datos -->

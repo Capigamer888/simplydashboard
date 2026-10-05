@@ -34,7 +34,8 @@ $stmtTables->execute();
 $tablasValidas = $stmtTables->fetchAll(PDO::FETCH_COLUMN) ?: [];
 
 if (!in_array($table, $tablasValidas, true)) {
-    die("Error de seguridad: La tabla solicitada no existe en la base de datos.");
+    header("Location: " . BASE_URL . "/Dashboard/dashboard.php?error=" . urlencode("La tabla solicitada no existe."));
+    exit;
 }
 
 // 2. Obtener las columnas de la tabla activa consultando INFORMATION_SCHEMA.COLUMNS
@@ -89,6 +90,9 @@ if (!empty($columns)) {
 
 // Ruta física donde se almacenan las fotos subidas
 $ruta_foto = BASE_URL . "/Foto/";
+
+$errorMessage   = isset($_GET['error']) ? sanitize_input($_GET['error']) : '';
+$successMessage = isset($_GET['success']) ? sanitize_input($_GET['success']) : '';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -105,6 +109,18 @@ $ruta_foto = BASE_URL . "/Foto/";
             <h1>Tabla: <span><?= e($table) ?></span></h1>
             <a href="<?= BASE_URL ?>/Dashboard/dashboard.php" class="back-link">&larr; Volver al Dashboard</a>
         </div>
+
+        <?php if (!empty($errorMessage)): ?>
+            <div class="alert-banner error">
+                <strong>⚠ Atención:</strong> <?= e($errorMessage) ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if (!empty($successMessage)): ?>
+            <div class="alert-banner success">
+                <strong>✓ Éxito:</strong> <?= e($successMessage) ?>
+            </div>
+        <?php endif; ?>
 
         <!-- Formulario de búsqueda universal y límite de filas -->
         <form method="GET" class="search-bar">

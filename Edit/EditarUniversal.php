@@ -142,6 +142,9 @@ foreach ($allColsInfo as $colInfo) {
         // Renderizado de campos con Claves Foráneas: Consulta opciones en la tabla padre referenciada
         foreach ($fkResult as $fkRow) {
             $colName   = $fkRow['COLUMN_NAME'];
+            if (in_array($colName, $pkColumns, true)) {
+                continue;
+            }
             $refTable  = $fkRow['REFERENCED_TABLE_NAME'];
             $refColumn = $fkRow['REFERENCED_COLUMN_NAME'];
             $currentVal = (string)($row[$colName] ?? '');

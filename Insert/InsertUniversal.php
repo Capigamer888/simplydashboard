@@ -74,16 +74,32 @@ foreach ($allColsInfo as $colInfo) {
 }
 
 /**
- * Calcula de forma automática el siguiente ID disponible para la tabla si es numérico.
+ * Calcula de forma automática el siguiente ID disponible para la tabla si es numérico o alfanumérico secuencial.
  */
 function calcularSiguienteId(PDO $conn, string $table, string $pkCol): string {
     if ($pkCol === '' || !is_valid_identifier($table) || !is_valid_identifier($pkCol)) {
         return '1';
     }
     try {
-        $stmt = $conn->query("SELECT COALESCE(MAX(CAST(`{$pkCol}` AS UNSIGNED)), 0) + 1 AS next_id FROM `{$table}`");
-        $res = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (string)($res['next_id'] ?? '1');
+        $stmt = $conn->query("SELECT `{$pkCol}` FROM `{$table}` ORDER BY `{$pkCol}` DESC LIMIT 1");
+        $lastVal = (string)($stmt->fetchColumn() ?: '');
+
+        if ($lastVal === '') {
+            return '1';
+        }
+
+        if (preg_match('/^([a-zA-Z_-]+)(\d+)$/', $lastVal, $matches)) {
+            $prefix = $matches[1];
+            $num = (int)$matches[2] + 1;
+            $length = strlen($matches[2]);
+            return $prefix . str_pad((string)$num, $length, '0', STR_PAD_LEFT);
+        }
+
+        if (is_numeric($lastVal)) {
+            return (string)((int)$lastVal + 1);
+        }
+
+        return '';
     } catch (PDOException $e) {
         return '';
     }

@@ -19,7 +19,7 @@ if (!defined('BASE_URL')) {
         }
     }
     $detectedBase = rtrim($scriptDir, '/');
-    define('BASE_URL', ($detectedBase !== '' && $detectedBase !== '.') ? $detectedBase : '/SimplyDashboard');
+    define('BASE_URL', ($detectedBase !== '' && $detectedBase !== '.') ? $detectedBase : '/simplydashboard');
 }
 
 // Define la ruta física absoluta en el disco del servidor

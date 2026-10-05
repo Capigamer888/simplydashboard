@@ -45,6 +45,19 @@ foreach ($colsInfo as $c) {
     $nullableMap[$c['COLUMN_NAME']] = (strtoupper($c['IS_NULLABLE'] ?? '') === 'YES');
 }
 
+$stmtPk = $conn->prepare("
+    SELECT COLUMN_NAME 
+    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+    WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = ? 
+      AND CONSTRAINT_NAME = 'PRIMARY'
+");
+$stmtPk->execute([$table]);
+$pkColumns = $stmtPk->fetchAll(PDO::FETCH_COLUMN) ?: [];
+if ($col !== '' && !in_array($col, $pkColumns, true)) {
+    $pkColumns[] = $col;
+}
+
 // 2. Manejo de Clave Primaria: Si el usuario dejó el ID vacío, calcular el siguiente
 $id = isset($_POST[$col]) ? trim((string)$_POST[$col]) : '';
 if ($id === '' && $col !== '' && is_valid_identifier($col)) {
@@ -123,8 +136,8 @@ foreach ($_POST as $colName => $val) {
 
     $cleanVal = is_string($val) ? trim($val) : $val;
 
-    // Si el ID está vacío y la columna es autoincremental, se omite para que MySQL la asigne
-    if ($colName === $col && $cleanVal === '') {
+    // Si el ID está vacío y la columna es la clave primaria o autoincremental, se omite para que MySQL la asigne
+    if (($colName === $col || in_array($colName, $pkColumns, true)) && $cleanVal === '') {
         continue;
     }
 
@@ -153,8 +166,9 @@ try {
     $stmtInsert = $conn->prepare($sql);
     $stmtInsert->execute($params);
 
-    header("Location: " . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($table));
+    header("Location: " . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($table) . "&success=" . urlencode("Registro insertado exitosamente."));
     exit;
 } catch (PDOException $e) {
-    die("Error al insertar el registro en la base de datos: " . e($e->getMessage()));
+    header("Location: " . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($table) . "&error=" . urlencode("Error al insertar el registro: " . $e->getMessage()));
+    exit;
 }

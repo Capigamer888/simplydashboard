@@ -136,8 +136,9 @@ try {
     $stmt = $conn->prepare($sql);
     $stmt->execute($params);
 
-    header("Location: " . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($table));
+    header("Location: " . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($table) . "&success=" . urlencode("Registro actualizado correctamente."));
     exit;
 } catch (PDOException $e) {
-    die("Error al actualizar el registro: " . e($e->getMessage()));
+    header("Location: " . BASE_URL . "/Read/TablaUniversal.php?tbl=" . urlencode($table) . "&error=" . urlencode("Error al actualizar: " . $e->getMessage()));
+    exit;
 }
